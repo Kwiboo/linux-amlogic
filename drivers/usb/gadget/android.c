@@ -29,7 +29,6 @@
 #include <linux/usb/gadget.h>
 
 #include "gadget_chips.h"
-
 #include "f_fs.c"
 #include "f_audio_source.c"
 #include "f_mtp.c"
@@ -223,7 +222,7 @@ static int ffs_function_init(struct android_usb_function *f,
 	if (!f->config)
 		return -ENOMEM;
 
-	return functionfs_init();
+	return 0;
 }
 
 static void ffs_function_cleanup(struct android_usb_function *f)
@@ -356,12 +355,12 @@ static void __maybe_unused functionfs_closed_callback(struct ffs_data *ffs)
 	mutex_unlock(&dev->mutex);
 }
 
-static void __maybe_unused *functionfs_acquire_dev_callback(const char *dev_name)
+static void __maybe_unused *functionfs_acquire_dev_callback(struct ffs_dev *dev)
 {
 	return 0;
 }
 
-static void __maybe_unused functionfs_release_dev_callback(struct ffs_data *ffs_data)
+static void __maybe_unused functionfs_release_dev_callback(struct ffs_dev *dev)
 {
 }
 
