@@ -131,6 +131,7 @@ static int __maybe_unused two = 2;
 static int __maybe_unused three = 3;
 static unsigned long one_ul = 1;
 static int one_hundred = 100;
+static int mem_thresh = 65536;
 #ifdef CONFIG_PRINTK
 static int ten_thousand = 10000;
 #endif
@@ -1534,6 +1535,15 @@ static struct ctl_table vm_table[] = {
 		.extra2		= (void *)&mmap_rnd_compat_bits_max,
 	},
 #endif
+	{
+		.procname	= "mem_management_thresh",
+		.data		= &mem_management_thresh,
+		.maxlen		= sizeof(mem_management_thresh),
+		.mode		= 0666,
+		.proc_handler	= proc_mem_management_thresh_handler,
+		.extra1		= &zero,
+		.extra2		= &mem_thresh,
+	},
 	{ }
 };
 
