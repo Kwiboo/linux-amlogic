@@ -990,6 +990,10 @@ struct page *__rmqueue_smallest(struct zone *zone, unsigned int order,
 
 		page = list_entry(area->free_list[migratetype].next,
 							struct page, lru);
+#ifdef CONFIG_CMA
+		if (is_migrate_isolate(get_pageblock_migratetype(page)))
+			continue;
+#endif
 		list_del(&page->lru);
 		rmv_page_order(page);
 		area->nr_free--;
@@ -6465,7 +6469,7 @@ int alloc_contig_range(unsigned long start, unsigned long end,
 		       unsigned migratetype)
 {
 	unsigned long outer_start, outer_end;
-	int ret = 0, order;
+	int ret = 0, order, try_times = 0;
 
 	struct compact_control cc = {
 		.nr_migratepages = 0,
@@ -6506,6 +6510,7 @@ int alloc_contig_range(unsigned long start, unsigned long end,
 	if (ret)
 		return ret;
 
+try_again:
 	ret = __alloc_contig_migrate_range(&cc, start, end);
 	if (ret)
 		goto done;
@@ -6535,6 +6540,9 @@ int alloc_contig_range(unsigned long start, unsigned long end,
 	while (!PageBuddy(pfn_to_page(outer_start))) {
 		if (++order >= MAX_ORDER) {
 			ret = -EBUSY;
+			try_times++;
+			if (try_times < 10)
+				goto try_again;
 			goto done;
 		}
 		outer_start &= ~0UL << order;
@@ -6544,6 +6552,9 @@ int alloc_contig_range(unsigned long start, unsigned long end,
 	if (test_pages_isolated(outer_start, end, false)) {
 		pr_warn("alloc_contig_range test_pages_isolated(%lx, %lx) failed\n",
 		       outer_start, end);
+		try_times++;
+		if (try_times < 10)
+			goto try_again;
 		ret = -EBUSY;
 		goto done;
 	}
