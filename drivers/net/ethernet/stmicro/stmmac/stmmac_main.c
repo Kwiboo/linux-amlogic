@@ -3402,7 +3402,7 @@ error_hw_init:
 error_clk_get:
 	free_netdev(ndev);
 
-	return ERR_PTR(ret);
+	return NULL;
 }
 
 /**
