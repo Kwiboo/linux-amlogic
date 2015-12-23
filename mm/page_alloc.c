@@ -761,14 +761,16 @@ static void free_one_page(struct zone *zone,
 				int migratetype)
 {
 	unsigned long nr_scanned;
+	int cur_migratetype;
 	spin_lock(&zone->lock);
 	nr_scanned = zone_page_state(zone, NR_PAGES_SCANNED);
 	if (nr_scanned)
 		__mod_zone_page_state(zone, NR_PAGES_SCANNED, -nr_scanned);
 
-	__free_one_page(page, pfn, zone, order, migratetype);
-	if (unlikely(!is_migrate_isolate(migratetype)))
-		__mod_zone_freepage_state(zone, 1 << order, migratetype);
+	cur_migratetype = get_pageblock_migratetype(page);
+	__free_one_page(page, pfn, zone, order, cur_migratetype);
+	if (unlikely(!is_migrate_isolate(cur_migratetype)))
+		__mod_zone_freepage_state(zone, 1 << order, cur_migratetype);
 	spin_unlock(&zone->lock);
 }
 
