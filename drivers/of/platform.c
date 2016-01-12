@@ -73,6 +73,13 @@ void of_device_make_bus_id(struct device *dev)
 	struct device_node *node = dev->of_node;
 	const __be32 *reg;
 	u64 addr;
+	const char *name;
+
+	name = of_get_property(node, "device_name", NULL);
+	if (name) {
+		dev_set_name(dev, "%s", name);
+		return;
+	}
 
 	/* Construct the name, using parent nodes if necessary to ensure uniqueness */
 	while (node->parent) {
