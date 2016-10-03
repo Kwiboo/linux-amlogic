@@ -1905,7 +1905,7 @@ static bool __zone_watermark_ok(struct zone *z, unsigned int order,
 #endif
 
 	free_pages -= free_cma;
-	if (free_pages <= min + lowmem_reserve)
+	if (free_pages <= min + z->lowmem_reserve[classzone_idx])
 		return false;
 	for (o = 0; o < order; o++) {
 		/* At the next order, this order's pages become unavailable */
