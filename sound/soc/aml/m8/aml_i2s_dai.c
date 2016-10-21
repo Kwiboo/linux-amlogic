@@ -123,71 +123,19 @@ static void aml_dai_i2s_shutdown(struct snd_pcm_substream *substream,
 
 #define AOUT_EVENT_IEC_60958_PCM 0x1
 extern int aout_notifier_call_chain(unsigned long val, void *v);
-extern void aml_hw_iec958_init(struct snd_pcm_substream *substream);
+extern void aml_hw_iec958_init(struct snd_pcm_substream *substream, int samesrc);
 
 static int aml_dai_i2s_prepare(struct snd_pcm_substream *substream,
 			       struct snd_soc_dai *dai)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct aml_runtime_data *prtd = runtime->private_data;
-	struct aml_i2s *i2s = snd_soc_dai_get_drvdata(dai);
-	int audio_clk_config = AUDIO_CLK_FREQ_48;
 	audio_stream_t *s = &prtd->s;
 	ALSA_TRACE();
-	switch (runtime->rate) {
-	case 192000:
-		audio_clk_config = AUDIO_CLK_FREQ_192;
-		break;
-	case 176400:
-		audio_clk_config = AUDIO_CLK_FREQ_1764;
-		break;
-	case 96000:
-		audio_clk_config = AUDIO_CLK_FREQ_96;
-		break;
-	case 88200:
-		audio_clk_config = AUDIO_CLK_FREQ_882;
-		break;
-	case 48000:
-		audio_clk_config = AUDIO_CLK_FREQ_48;
-		break;
-	case 44100:
-		audio_clk_config = AUDIO_CLK_FREQ_441;
-		break;
-	case 32000:
-		audio_clk_config = AUDIO_CLK_FREQ_32;
-		break;
-	case 8000:
-		audio_clk_config = AUDIO_CLK_FREQ_8;
-		break;
-	case 11025:
-		audio_clk_config = AUDIO_CLK_FREQ_11;
-		break;
-	case 16000:
-		audio_clk_config = AUDIO_CLK_FREQ_16;
-		break;
-	case 22050:
-		audio_clk_config = AUDIO_CLK_FREQ_22;
-		break;
-	case 12000:
-		audio_clk_config = AUDIO_CLK_FREQ_12;
-		break;
-	case 24000:
-		audio_clk_config = AUDIO_CLK_FREQ_22;
-		break;
-	default:
-		audio_clk_config = AUDIO_CLK_FREQ_441;
-		break;
-	};
-	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		audio_out_i2s_enable(0);
-	if (i2s->old_samplerate != runtime->rate) {
-		ALSA_PRINT("enterd %s,old_samplerate:%d,sample_rate=%d\n",
-			   __func__, i2s->old_samplerate, runtime->rate);
-		i2s->old_samplerate = runtime->rate;
-		audio_set_i2s_clk(audio_clk_config, AUDIO_CLK_256FS, i2s->mpll);
+		audio_util_set_dac_i2s_format(AUDIO_ALGOUT_DAC_FORMAT_DSP);
 	}
-	audio_util_set_dac_i2s_format(AUDIO_ALGOUT_DAC_FORMAT_DSP);
-
 	if (substream->stream == SNDRV_PCM_STREAM_CAPTURE) {
 		s->i2s_mode = dai_info[dai->id].i2s_mode;
 		audio_in_i2s_set_buf(runtime->dma_addr, runtime->dma_bytes * 2,
@@ -203,15 +151,14 @@ static int aml_dai_i2s_prepare(struct snd_pcm_substream *substream,
 		s->device_type = AML_AUDIO_I2SIN;
 	} else {
 		s->device_type = AML_AUDIO_I2SOUT;
+		IEC958_mode_codec = 0;
 		aml_hw_i2s_init(runtime);
 /* i2s/958 share the same audio hw buffer when PCM mode */
 		if (IEC958_mode_codec == 0) {
-			aml_hw_iec958_init(substream);
+			aml_hw_iec958_init(substream, 1);
 			/* use the hw same sync for i2s/958 */
 			WRITE_MPEG_REG_BITS(AIU_I2S_MISC, 1, 3, 1);
 		}
-		else
-			WRITE_MPEG_REG_BITS(AIU_I2S_MISC, 0, 3, 1);
 	}
 	if (runtime->channels == 8) {
 		ALSA_PRINT("[%s,%d]8ch PCM output->notify HDMI\n", __func__,
@@ -271,7 +218,59 @@ static int aml_dai_i2s_hw_params(struct snd_pcm_substream *substream,
 				 struct snd_pcm_hw_params *params,
 				 struct snd_soc_dai *dai)
 {
+	struct aml_i2s *i2s = snd_soc_dai_get_drvdata(dai);
+	int srate, audio_clk_config;
 	ALSA_TRACE();
+	srate = params_rate(params);
+	switch (srate) {
+	case 192000:
+		audio_clk_config = AUDIO_CLK_FREQ_192;
+		break;
+	case 176400:
+		audio_clk_config = AUDIO_CLK_FREQ_1764;
+		break;
+	case 96000:
+		audio_clk_config = AUDIO_CLK_FREQ_96;
+		break;
+	case 88200:
+		audio_clk_config = AUDIO_CLK_FREQ_882;
+		break;
+	case 48000:
+		audio_clk_config = AUDIO_CLK_FREQ_48;
+		break;
+	case 44100:
+		audio_clk_config = AUDIO_CLK_FREQ_441;
+		break;
+	case 32000:
+		audio_clk_config = AUDIO_CLK_FREQ_32;
+		break;
+	case 8000:
+		audio_clk_config = AUDIO_CLK_FREQ_8;
+		break;
+	case 11025:
+		audio_clk_config = AUDIO_CLK_FREQ_11;
+		break;
+	case 16000:
+		audio_clk_config = AUDIO_CLK_FREQ_16;
+		break;
+	case 22050:
+		audio_clk_config = AUDIO_CLK_FREQ_22;
+		break;
+	case 12000:
+		audio_clk_config = AUDIO_CLK_FREQ_12;
+		break;
+	case 24000:
+		audio_clk_config = AUDIO_CLK_FREQ_22;
+		break;
+	default:
+		audio_clk_config = AUDIO_CLK_FREQ_441;
+		break;
+	};
+	if (i2s->old_samplerate != srate) {
+		i2s->old_samplerate = srate;
+		audio_set_i2s_clk(audio_clk_config, AUDIO_CLK_256FS, i2s->mpll);
+	}
+
 	return 0;
 }
 
@@ -319,8 +318,8 @@ static int aml_dai_i2s_resume(struct snd_soc_dai *dai)
 #define aml_dai_i2s_resume	NULL
 #endif				/* CONFIG_PM */
 
-#define AML_DAI_I2S_RATES		(SNDRV_PCM_RATE_8000_192000)
-#define AML_DAI_I2S_FORMATS		(SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_S24_LE | SNDRV_PCM_FMTBIT_S32_LE)
+#define AML_DAI_I2S_RATES		SNDRV_PCM_RATE_32000 | SNDRV_PCM_RATE_44100 | SNDRV_PCM_RATE_48000 | SNDRV_PCM_RATE_88200 | SNDRV_PCM_RATE_96000 | SNDRV_PCM_RATE_176400 | SNDRV_PCM_RATE_192000
+#define AML_DAI_I2S_FORMATS		SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_S32_LE
 
 static struct snd_soc_dai_ops aml_dai_i2s_ops = {
 	.startup = aml_dai_i2s_startup,

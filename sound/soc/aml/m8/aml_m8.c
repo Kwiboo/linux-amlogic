@@ -790,7 +790,7 @@ static struct snd_soc_dai_link aml_codec_dai_link[] = {
 };
 
 static struct snd_soc_card aml_snd_soc_card = {
-    .driver_name = "SOC-Audio",
+    .driver_name = "AML-M8AUDIO",
     .dai_link = &aml_codec_dai_link[0],
     .num_links = ARRAY_SIZE(aml_codec_dai_link),
     .set_bias_level = aml_set_bias_level,

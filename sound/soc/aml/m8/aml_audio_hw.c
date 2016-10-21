@@ -152,7 +152,7 @@ void audio_set_aiubuf(u32 addr, u32 size, unsigned int channel)
     }
 
     WRITE_MPEG_REG(AIU_I2S_MISC,        0x0004);    // Hold I2S
-    WRITE_MPEG_REG(AIU_I2S_MUTE_SWAP,   0x0000);    // No mute, no swap
+    //WRITE_MPEG_REG(AIU_I2S_MUTE_SWAP,   0x0000);    // No mute, no swap
     // As the default amclk is 24.576MHz, set i2s and iec958 divisor appropriately so as not to exceed the maximum sample rate.
     WRITE_MPEG_REG(AIU_I2S_MISC,        0x0010 );   // Release hold and force audio data to left or right
 
@@ -322,7 +322,7 @@ static void spdifin_fifo1_set_buf(u32 addr, u32 size)
     // according clk81 to set reg spdif_mode(0x2800) the last 14 bit and reg Spdif_fs_clk_rltn(0x2801)
     spdifin_reg_set();
 
-    WRITE_MPEG_REG(AUDIN_FIFO1_CTRL1,0xc);
+    WRITE_MPEG_REG(AUDIN_FIFO1_CTRL1,0x88);
 }
 void audio_in_i2s_set_buf(u32 addr, u32 size,u32 i2s_mode, u32 i2s_sync)
 {
@@ -498,9 +498,9 @@ void audio_util_set_dac_958_format(unsigned format)
 {
     WRITE_MPEG_REG_BITS(AIU_CLK_CTRL,0,12,1);// 958 divisor more, if true, divided by 2, 4, 6, 8
 #if IEC958_OVERCLOCK == 1
-    WRITE_MPEG_REG_BITS(AIU_CLK_CTRL,3,4,2);// 958 divisor: 0=no div; 1=div by 2; 2=div by 3; 3=div by 4.
+    //WRITE_MPEG_REG_BITS(AIU_CLK_CTRL,3,4,2);// 958 divisor: 0=no div; 1=div by 2; 2=div by 3; 3=div by 4.
 #else
-    WRITE_MPEG_REG_BITS(AIU_CLK_CTRL,1,4,2);// 958 divisor: 0=no div; 1=div by 2; 2=div by 3; 3=div by 4.
+    //WRITE_MPEG_REG_BITS(AIU_CLK_CTRL,1,4,2);// 958 divisor: 0=no div; 1=div by 2; 2=div by 3; 3=div by 4.
 #endif
     WRITE_MPEG_REG_BITS(AIU_CLK_CTRL,1,1,1);// enable 958 clock
 }
