@@ -105,7 +105,7 @@ extern unsigned IEC958_MODE;
 extern unsigned I2S_MODE;
 
 void audio_set_aiubuf(u32 addr, u32 size, unsigned int channel);
-void audio_set_958outbuf(u32 addr, u32 size, int flag);
+void audio_set_958outbuf(u32 addr, u32 size, int channels);
 void audio_in_i2s_set_buf(u32 addr, u32 size,u32 i2s_mode, u32 i2s_sync);
 void audio_in_spdif_set_buf(u32 addr, u32 size);
 void audio_in_i2s_enable(int flag);
@@ -115,7 +115,7 @@ unsigned int audio_in_i2s_wr_ptr(void);
 unsigned int audio_in_spdif_wr_ptr(void);
 void audio_set_i2s_mode(u32 mode);
 void audio_set_i2s_clk(unsigned freq, unsigned fs_config, unsigned mpll);
-void audio_set_958_clk(unsigned freq, unsigned fs_config);
+void audio_set_958_clk(unsigned freq, unsigned fs_config, int channels);
 void audio_enable_ouput(int flag);
 unsigned int read_i2s_rd_ptr(void);
 void audio_i2s_unmute(void);

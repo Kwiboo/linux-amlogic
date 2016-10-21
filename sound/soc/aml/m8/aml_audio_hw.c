@@ -95,7 +95,7 @@ int audio_clock_config_table[][13][2]=
 #if OVERCLOCK == 0
         {0x0005cc08, (60-1)},  // 32    
         {0x0005e965, (40-1)}, //44.1    
-        {0x0004c9a0, (50-1)}, //48K 
+        {0x0005cc08, (40-1)}, //48K 
         {0x0005cc08, (20-1)}, // 96k ,24.576M
         {0x0005cc08, (10-1)}, // 192k, 49.152M
         {0x0007f400, (125-1)}, // 8k
@@ -179,27 +179,26 @@ void audio_set_aiubuf(u32 addr, u32 size, unsigned int channel)
     audio_out_buf_ready = 1;
 }
 
-void audio_set_958outbuf(u32 addr, u32 size,int flag)
+void audio_set_958outbuf(u32 addr, u32 size, int channels)
 {
     if (ENABLE_IEC958) {
         WRITE_MPEG_REG(AIU_MEM_IEC958_START_PTR, addr & 0xffffffc0);
-        if(READ_MPEG_REG(AIU_MEM_IEC958_START_PTR) == READ_MPEG_REG(AIU_MEM_I2S_START_PTR)){
-            WRITE_MPEG_REG(AIU_MEM_IEC958_RD_PTR, READ_MPEG_REG(AIU_MEM_I2S_RD_PTR));
-        }
-        else
-            WRITE_MPEG_REG(AIU_MEM_IEC958_RD_PTR, addr & 0xffffffc0);
-        if(flag == 0){
-            WRITE_MPEG_REG(AIU_MEM_IEC958_END_PTR, (addr & 0xffffffc0) + (size & 0xffffffc0) - 64);    // this is for 16bit 2 channel
-        }else{
-            WRITE_MPEG_REG(AIU_MEM_IEC958_END_PTR, (addr & 0xffffffc0) + (size & 0xffffffc0) - 1);    // this is for RAW mode
-        }
-        WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_MASKS, 0x303, 0, 16);
+        WRITE_MPEG_REG(AIU_MEM_IEC958_RD_PTR, addr & 0xffffffc0);
 
+        if (channels == 8) {
+            WRITE_MPEG_REG(AIU_MEM_IEC958_END_PTR, (addr & 0xffffffc0) + (size & 0xffffffc0) - 256);
+			WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_MASKS, 0xffff, 0, 16);
+        } else {
+            WRITE_MPEG_REG(AIU_MEM_IEC958_END_PTR, (addr & 0xffffffc0) + (size & 0xffffffc0) - 64);
+			WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_MASKS, 0x0303, 0, 16);
+        }
+
+		// Set init high then low to initilize the IEC958 memory logic
         WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_CONTROL, 1, 0, 1);
         WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_CONTROL, 0, 0, 1);
 
-        WRITE_MPEG_REG(AIU_MEM_IEC958_BUF_CNTL, 1 | (0 << 1));
-        WRITE_MPEG_REG(AIU_MEM_IEC958_BUF_CNTL, 0 | (0 << 1));
+        WRITE_MPEG_REG(AIU_MEM_IEC958_BUF_CNTL, 1);
+        WRITE_MPEG_REG(AIU_MEM_IEC958_BUF_CNTL, 0);
     }
 }
 /*
@@ -673,7 +672,7 @@ void audio_set_i2s_clk(unsigned freq, unsigned fs_config, unsigned mpll)
 }
 
 // iec958 and i2s clock are separated after M6TV. Use PLL1 for iec958 clock
-void audio_set_958_clk(unsigned freq, unsigned fs_config)
+void audio_set_958_clk(unsigned freq, unsigned fs_config, int channels)
 {
     int i;
     int xtal = 0;
@@ -737,10 +736,11 @@ void audio_set_958_clk(unsigned freq, unsigned fs_config)
 
     // gate the clock off
     WRITE_MPEG_REG( HHI_AUD_CLK_CNTL, READ_MPEG_REG(HHI_AUD_CLK_CNTL) & ~(1 << 8));
-    //WRITE_MPEG_REG(AIU_CLK_CTRL_MORE, 0);
-    
-    //Set filter register
-    //WRITE_MPEG_REG(HHI_MPLL_CNTL3, 0x26e1250);
+
+    WRITE_MPEG_REG(AIU_CLK_CTRL_MORE, 0);
+	if (channels == 8) {
+		WRITE_MPEG_REG_BITS(AIU_CLK_CTRL_MORE, 1, 6, 1);
+	}
 
     /*--- IEC958 clock  configuration, use MPLL1--- */
     // Disable mclk
@@ -753,11 +753,7 @@ void audio_set_958_clk(unsigned freq, unsigned fs_config)
     // Configure Multi-Phase PLL1
     WRITE_MPEG_REG(MPLL_958_CNTL, audio_clock_config[index][0]);
     // Set the XD value
-#if IEC958_OVERCLOCK==1
-    WRITE_MPEG_REG_BITS(HHI_AUD_CLK_CNTL2, (audio_clock_config[index][1]+1)/2 -1, 16, 8);
-#else
     WRITE_MPEG_REG_BITS(HHI_AUD_CLK_CNTL2, audio_clock_config[index][1], 16, 8);
-#endif
 
     // delay 5uS
     //udelay(5);
