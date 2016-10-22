@@ -34,10 +34,10 @@
 #define HRTIMER_PERIOD (1000000000UL/1000)
 //#define DEBUG_ALSA_PLATFRORM
 
-#define ALSA_PRINT(fmt,args...) printk(KERN_INFO "[aml-platform]" fmt,##args)
+#define ALSA_PRINT(fmt,args...) printk(KERN_INFO "[aml-i2s::%s]" fmt, __func__, ##args)
 #ifdef DEBUG_ALSA_PLATFRORM
-#define ALSA_DEBUG(fmt,args...) printk(KERN_INFO "[aml-platform]" fmt,##args)
-#define ALSA_TRACE()        printk("[aml-platform] enter func %s,line %d\n",__FUNCTION__,__LINE__)
+#define ALSA_DEBUG(fmt,args...) printk(KERN_INFO "[aml-i2s]" fmt,##args)
+#define ALSA_TRACE()        printk("[aml-i2s] enter func %s,line %d\n",__FUNCTION__,__LINE__)
 #else
 #define ALSA_DEBUG(fmt,args...)
 #define ALSA_TRACE()
@@ -141,7 +141,7 @@ static const struct snd_pcm_hardware aml_i2s_hardware = {
 
     .formats        = SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_S24_LE | SNDRV_PCM_FMTBIT_S32_LE,
 
-    .period_bytes_min   = 64,
+    .period_bytes_min   = 256,
     .period_bytes_max   = 32 * 1024 * 2,
     .periods_min        = 2,
     .periods_max        = 1024,
@@ -175,7 +175,7 @@ static const struct snd_pcm_hardware aml_i2s_capture = {
     .fifo_size = 0,
 };
 
-static unsigned int period_sizes[] = { 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 65536 * 2, 65536 * 4 };
+static unsigned int period_sizes[] = { 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 65536 * 2, 65536 * 4 };
 
 static struct snd_pcm_hw_constraint_list hw_constraints_period_sizes = {
     .count = ARRAY_SIZE(period_sizes),
@@ -671,21 +671,12 @@ static int aml_i2s_copy_playback(struct snd_pcm_runtime *runtime, int channel,
 {
     int res = 0;
     int n;
-    int i = 0, j = 0;
-    int  align = runtime->channels * 32 / runtime->byte_align;
     char *hwbuf = runtime->dma_area + frames_to_bytes(runtime, pos);
     struct aml_runtime_data *prtd = runtime->private_data;
     struct snd_dma_buffer *buffer = &substream->dma_buffer;
     struct aml_audio_buffer *tmp_buf = buffer->private_data;
     void *ubuf = tmp_buf->buffer_start;
-    audio_stream_t *s = &prtd->s;
-    if (s->device_type == AML_AUDIO_I2SOUT) {
-        aml_i2s_alsa_write_addr = frames_to_bytes(runtime, pos);
-    }
     n = frames_to_bytes(runtime, count);
-    if (aml_i2s_playback_enable == 0 && s->device_type == AML_AUDIO_I2SOUT) {
-        return res;
-    }
     if (n > tmp_buf->buffer_size) {
 	    printk("FATAL_ERR:UserData/%d > buffer_size/%d\n",
 				n, tmp_buf->buffer_size);
@@ -695,111 +686,17 @@ static int aml_i2s_copy_playback(struct snd_pcm_runtime *runtime, int channel,
     if (res) {
         return -EFAULT;
     }
-    if (access_ok(VERIFY_READ, buf, frames_to_bytes(runtime, count))) {
+    if (access_ok(VERIFY_READ, buf, n)) {
         if (runtime->format == SNDRV_PCM_FORMAT_S16_LE) {
-
-            int16_t * tfrom, *to, *left, *right;
-            tfrom = (int16_t*)ubuf;
-            to = (int16_t*)hwbuf;
-
-            left = to;
-            right = to + 16;
-            if (pos % align) {
-                printk("audio data unligned: pos=%d, n=%d, align=%d\n", (int)pos, n, align);
-            }
-            if (set_android_gain_enable == 0) {
-                for (j = 0; j < n; j += 64) {
-                    for (i = 0; i < 16; i++) {
-                        *left++ = (*tfrom++) ;
-                        *right++ = (*tfrom++);
-                    }
-                    left += 16;
-                    right += 16;
-                }
-            } else {
-                for (j = 0; j < n; j += 64) {
-                    for (i = 0; i < 16; i++) {
-                        *left++ = (int16_t)(((*tfrom++) * android_left_gain) >> 8);
-                        *right++ = (int16_t)(((*tfrom++) * android_right_gain) >> 8);
-                    }
-                    left += 16;
-                    right += 16;
-                }
-            }
-        } else if (runtime->format == SNDRV_PCM_FORMAT_S24_LE && I2S_MODE == AIU_I2S_MODE_PCM24) {
-            int32_t *tfrom, *to, *left, *right;
-            tfrom = (int32_t*)ubuf;
-            to = (int32_t*) hwbuf;
-
-            left = to;
-            right = to + 8;
-
-            if (pos % align) {
-                printk("audio data unaligned: pos=%d, n=%d, align=%d\n", (int)pos, n, align);
-            }
-            for (j = 0; j < n; j += 64) {
-                for (i = 0; i < 8; i++) {
-                    *left++  = (*tfrom ++);
-                    *right++  = (*tfrom ++);
-                }
-                left += 8;
-                right += 8;
-            }
-
-        } else if (runtime->format == SNDRV_PCM_FORMAT_S32_LE /*&& I2S_MODE == AIU_I2S_MODE_PCM32*/) {
-            int32_t *tfrom, *to, *left, *right;
-            tfrom = (int32_t*)ubuf;
-            to = (int32_t*) hwbuf;
-
-            left = to;
-            right = to + 8;
-
-            if (pos % align) {
-                printk("audio data unaligned: pos=%d, n=%d, align=%d\n", (int)pos, n, align);
-            }
-
-            if (runtime->channels == 8) {
-                int32_t *lf, *cf, *rf, *ls, *rs, *lef, *sbl, *sbr;
-                lf  = to;
-                cf  = to + 8 * 1;
-                rf  = to + 8 * 2;
-                ls  = to + 8 * 3;
-                rs  = to + 8 * 4;
-                lef = to + 8 * 5;
-                sbl = to + 8 * 6;
-                sbr = to + 8 * 7;
-                for (j = 0; j < n; j += 256) {
-                    for (i = 0; i < 8; i++) {
-                        *lf++  = (*tfrom ++) >> 8;
-                        *cf++  = (*tfrom ++) >> 8;
-                        *rf++  = (*tfrom ++) >> 8;
-                        *ls++  = (*tfrom ++) >> 8;
-                        *rs++  = (*tfrom ++) >> 8;
-                        *lef++ = (*tfrom ++) >> 8;
-                        *sbl++ = (*tfrom ++) >> 8;
-                        *sbr++ = (*tfrom ++) >> 8;
-                    }
-                    lf  += 7 * 8;
-                    cf  += 7 * 8;
-                    rf  += 7 * 8;
-                    ls  += 7 * 8;
-                    rs  += 7 * 8;
-                    lef += 7 * 8;
-                    sbl += 7 * 8;
-                    sbr += 7 * 8;
-                }
-            } else {
-                for (j = 0; j < n; j += 64) {
-                    for (i = 0; i < 8; i++) {
-                        *left++  = (*tfrom ++) >> 8;
-                        *right++  = (*tfrom ++) >> 8;
-                    }
-                    left += 8;
-                    right += 8;
-                }
-            }
+			ALSA_PRINT("16: channel:%d, pos:%d, count:%d\n", channel, frames_to_bytes(runtime, pos), frames_to_bytes(runtime, count));
+			memcpy(hwbuf, ubuf, n);
+        } else if (runtime->format == SNDRV_PCM_FORMAT_S24_LE) {
+			ALSA_PRINT("24: channel:%d, pos:%d, count:%d\n", channel, frames_to_bytes(runtime, pos), frames_to_bytes(runtime, count));
+			memcpy(hwbuf, ubuf, n);
+        } else if (runtime->format == SNDRV_PCM_FORMAT_S32_LE) {
+			ALSA_PRINT("32: channel:%d, pos:%d, count:%d\n", channel, frames_to_bytes(runtime, pos), frames_to_bytes(runtime, count));
+			memcpy(hwbuf, ubuf, n);
         }
-
     } else {
         res = -EFAULT;
     }

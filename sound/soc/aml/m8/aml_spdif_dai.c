@@ -394,6 +394,7 @@ static int aml_dai_spdif_prepare(struct snd_pcm_substream *substream,
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		ALSA_PRINT("call audio_set_958outbuf\n");
 		audio_set_958outbuf(runtime->dma_addr, snd_pcm_lib_buffer_bytes(substream), 0);
+		aout_notifier_call_chain(AOUT_EVENT_IEC_60958_PCM, substream);
 	} else {
 		audio_in_spdif_set_buf(runtime->dma_addr,
 				       runtime->dma_bytes * 2);
@@ -417,7 +418,7 @@ static int aml_dai_spdif_hw_params(struct snd_pcm_substream *substream,
 	_aiu_958_raw_setting_t set;
 	_aiu_958_channel_status_t chstat;
 	unsigned iec958_mode;
-	int sample_rate;
+	int sample_rate, rate;
 
 	ALSA_PRINT("rate:%d, channels:%d, format:%d\n", params_rate(params), params_channels(params), params_format(params));
 
@@ -426,7 +427,8 @@ static int aml_dai_spdif_hw_params(struct snd_pcm_substream *substream,
 	memset((void *)(&chstat), 0, sizeof(chstat));
 	set.chan_stat = &chstat;
 
-	switch (params_rate(params)) {
+	rate = params_rate(params);
+	switch (rate) {
 	case 192000:
 		sample_rate = AUDIO_CLK_FREQ_192;
 		break;
@@ -494,19 +496,19 @@ static int aml_dai_spdif_hw_params(struct snd_pcm_substream *substream,
 	/* AES3+2 */
 	if (IEC958_mode_codec == 8) {
 		set.chan_stat->chstat1_l = 0x0900;
-	} else if (runtime->rate == 192000) {
+	} else if (rate == 192000) {
 		set.chan_stat->chstat1_l = 0x0e00;
-	} else if (runtime->rate == 176400) {
+	} else if (rate == 176400) {
 		set.chan_stat->chstat1_l = 0x0c00;
-	} else if (runtime->rate == 96000) {
+	} else if (rate == 96000) {
 		set.chan_stat->chstat1_l = 0x0a00;
-	} else if (runtime->rate == 88200) {
+	} else if (rate == 88200) {
 		set.chan_stat->chstat1_l = 0x0800;
-	} else if (runtime->rate == 48000) {
+	} else if (rate == 48000) {
 		set.chan_stat->chstat1_l = 0x0200;
-	} else if (runtime->rate == 44100) {
+	} else if (rate == 44100) {
 		set.chan_stat->chstat1_l = 0x0000;
-	} else if (runtime->rate == 32000) {
+	} else if (rate == 32000) {
 		set.chan_stat->chstat1_l = 0x0300;
 	} else {
 		set.chan_stat->chstat1_l = 0x0100;
@@ -516,8 +518,9 @@ static int aml_dai_spdif_hw_params(struct snd_pcm_substream *substream,
 	audio_set_958_clk(sample_rate, AUDIO_CLK_256FS, params_channels(params));
 
     WRITE_MPEG_REG_BITS(AIU_CLK_CTRL, 0, 12, 1);// 958 divisor more, if true, divided by 2, 4, 6, 8
-	WRITE_MPEG_REG_BITS(AIU_CLK_CTRL, 3, 4, 2);	/* 512fs divide 4 == 128fs */
+	WRITE_MPEG_REG_BITS(AIU_CLK_CTRL, 1, 4, 2);	/* 256fs divide 2 == 128fs */
     WRITE_MPEG_REG_BITS(AIU_CLK_CTRL, 1, 1, 1);// enable 958 clock
+	WRITE_MPEG_REG_BITS(AIU_I2S_MISC, 0, 3, 1);
 
 	audio_set_958_mode(iec958_mode, &set);
 
