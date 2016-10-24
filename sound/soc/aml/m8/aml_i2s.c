@@ -95,10 +95,10 @@ static const struct snd_pcm_hardware aml_i2s_hardware = {
     SNDRV_PCM_INFO_BLOCK_TRANSFER |
     SNDRV_PCM_INFO_PAUSE,
 
-    .formats        = SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_S24_LE,
+    .formats        = SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_S24_LE | SNDRV_PCM_FMTBIT_S32_LE,
 
     .period_bytes_min   = 256,
-    .period_bytes_max   = 512,
+    .period_bytes_max   = 4096,
     .periods_min        = 2,
     .periods_max        = 512,
     .buffer_bytes_max   = 512 * 512 * 8,
@@ -225,8 +225,8 @@ static int aml_i2s_hw_params(struct snd_pcm_substream *substream,
      * with different params */
 
     snd_pcm_set_runtime_buffer(substream, &substream->dma_buffer);
-    runtime->dma_bytes = params_channels(params) * 32;
-    ALSA_PRINT("runtime dma_bytes %d, stream type %d\n", runtime->dma_bytes, substream->stream);
+    //runtime->dma_bytes = params_buffer_bytes(params);
+    ALSA_PRINT("runtime dma_bytes %d, buffer_bytes %d, stream type %d\n", runtime->dma_bytes, params_buffer_bytes(params), substream->stream);
     s->I2S_addr = runtime->dma_addr;
 
     /*
@@ -241,6 +241,7 @@ static int aml_i2s_hw_params(struct snd_pcm_substream *substream,
 
         s->last_ptr = 0;
     }
+	s->size = 0;
 
     return 0;
 }
@@ -276,8 +277,17 @@ static irqreturn_t audio_isr_handler(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
+static irqreturn_t iec958_isr_handler(int irq, void *data)
+{
+	struct aml_runtime_data *prtd = data;
+	struct snd_pcm_substream *substream = prtd->substream;
+	ALSA_PRINT("iec958_isr_handler\n");
+	return IRQ_HANDLED;
+}
+
 static int snd_free_hw_timer_irq(void *data)
 {
+	free_irq(INT_AI_IEC958, data);
 	free_irq(INT_TIMER_D, data);
 	return 0;
 }
@@ -297,6 +307,12 @@ static int snd_request_hw_timer(void *data)
 				IRQF_SHARED, "timerd_irq", data);
 		if (ret < 0) {
 			pr_err("audio hw interrupt register fail\n");
+			return -1;
+		}
+	ret = request_irq(INT_AI_IEC958, iec958_isr_handler,
+				IRQF_SHARED, "iec958_irq", data);
+		if (ret < 0) {
+			pr_err("iec958 interrupt register fail\n");
 			return -1;
 		}
 	return 0;
@@ -377,7 +393,6 @@ static snd_pcm_uframes_t aml_i2s_pointer(
             ptr = read_iec958_rd_ptr();
         }
         addr = ptr - s->I2S_addr;
-		//ALSA_PRINT("ptr:%d, addr:%d\n", ptr, addr);
         return bytes_to_frames(runtime, addr);
     } else {
         if (s->device_type == AML_AUDIO_I2SIN) {
@@ -418,14 +433,13 @@ static void aml_i2s_timer_callback(unsigned long data)
 		else
 			last_ptr = read_iec958_rd_ptr();
 		if (last_ptr < s->last_ptr) {
-			size =
-				runtime->dma_bytes + last_ptr -
-				(s->last_ptr);
+			size = frames_to_bytes(runtime, runtime->buffer_size) + last_ptr - s->last_ptr;
 		} else {
-			size = last_ptr - (s->last_ptr);
+			size = last_ptr - s->last_ptr;
 		}
 		s->last_ptr = last_ptr;
-		s->size += bytes_to_frames(substream->runtime, size);
+		s->size += bytes_to_frames(runtime, size);
+		//ALSA_PRINT("last_ptr:%u, size:%u, s->size:%u, period_size:%d\n", last_ptr, size, s->size, runtime->period_size);
 		if (s->size >= runtime->period_size) {
 			s->size %= runtime->period_size;
 			elapsed = 1;
@@ -437,7 +451,7 @@ static void aml_i2s_timer_callback(unsigned long data)
 			last_ptr = audio_in_spdif_wr_ptr();
 		if (last_ptr < s->last_ptr) {
 			size =
-				runtime->dma_bytes + (last_ptr -
+				runtime->buffer_size + (last_ptr -
 						  (s->last_ptr)) / 2;
 			prtd->xrun_num = 0;
 		} else if (last_ptr == s->last_ptr) {
@@ -465,8 +479,9 @@ static void aml_i2s_timer_callback(unsigned long data)
 #endif
 
 	spin_unlock_irqrestore(&prtd->timer_lock, flags);
-	if (elapsed)
+	if (elapsed) {
 		snd_pcm_period_elapsed(substream);
+	}
 }
 
 
@@ -490,6 +505,20 @@ static int aml_i2s_open(struct snd_pcm_substream *substream)
             aml_i2s_capture_start_addr = (unsigned int)buf->area;
             aml_i2s_capture_phy_start_addr = buf->addr;
         }
+    }
+
+    /* ensure that peroid bytes is a multiple of 512 bytes */
+    ret = snd_pcm_hw_constraint_step(runtime, 0, SNDRV_PCM_HW_PARAM_PERIOD_BYTES, 512);
+    if (ret < 0) {
+        printk("set period bytes constraint error\n");
+        goto out;
+    }
+
+    /* ensure that buffer bytes is a multiple of 512 bytes */
+    ret = snd_pcm_hw_constraint_step(runtime, 0, SNDRV_PCM_HW_PARAM_BUFFER_BYTES, 512);
+    if (ret < 0) {
+        printk("set buffer bytes constraint error\n");
+        goto out;
     }
 
     if (!prtd) {

@@ -1048,16 +1048,16 @@ static int clock_fine_tune(void)
             if ( MESON_CPU_TYPE == MESON_CPU_TYPE_MESON8B )
                 aml_write_reg32(P_HHI_VID_PLL_CNTL2, 0x69c84cf8);
             else
-                aml_write_reg32(P_HHI_VID_PLL_CNTL2, 0x69c84d04);
+                aml_write_reg32(P_HHI_VID_PLL_CNTL2, 0x69c84d03);
             break;
         case VMODE_4K2K_23HZ:
         case VMODE_4K2K_29HZ:
             if ( MESON_CPU_TYPE == MESON_CPU_TYPE_MESON8B )
                 aml_write_reg32(P_HHI_VID_PLL_CNTL2, 0x69d84cf8);
             else if (IS_MESON_M8_CPU && hdmitx_is_special_tv_process())//SAMSUNG future TV, M8, in 4K2K mode
-                aml_write_reg32(P_HHI_VID_PLL_CNTL2, 0x59c84d04);
+                aml_write_reg32(P_HHI_VID_PLL_CNTL2, 0x59c84d03);
             else
-                aml_write_reg32(P_HHI_VID_PLL_CNTL2, 0x69d84d04);
+                aml_write_reg32(P_HHI_VID_PLL_CNTL2, 0x69d84d03);
             break;
         case VMODE_720P:
         case VMODE_1080I:

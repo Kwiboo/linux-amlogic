@@ -153,7 +153,7 @@ void audio_set_aiubuf(u32 addr, u32 size, unsigned int channel)
     }
 
     WRITE_MPEG_REG(AIU_I2S_MISC,        0x0004);    // Hold I2S
-    //WRITE_MPEG_REG(AIU_I2S_MUTE_SWAP,   0x0000);    // No mute, no swap
+    WRITE_MPEG_REG(AIU_I2S_MUTE_SWAP,   0x0000);    // No mute, no swap
     // As the default amclk is 24.576MHz, set i2s and iec958 divisor appropriately so as not to exceed the maximum sample rate.
     WRITE_MPEG_REG(AIU_I2S_MISC,        0x0010 );   // Release hold and force audio data to left or right
 
@@ -184,24 +184,21 @@ void audio_set_958outbuf(u32 addr, u32 size, int channels)
 {
     if (ENABLE_IEC958) {
         WRITE_MPEG_REG(AIU_MEM_IEC958_START_PTR, addr);
-        WRITE_MPEG_REG(AIU_MEM_IEC958_END_PTR, addr + size);
+        WRITE_MPEG_REG(AIU_MEM_IEC958_END_PTR, addr + size - 8);
         WRITE_MPEG_REG(AIU_MEM_IEC958_RD_PTR, addr);
  
         if (channels == 8) {
-			WRITE_MPEG_REG_BITS(AIU_CLK_CTRL_MORE, 1, 6, 1);
+			//WRITE_MPEG_REG_BITS(AIU_CLK_CTRL_MORE, 1, 6, 1);
 			WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_CONTROL, 1, 30, 1);
         } else {
-			WRITE_MPEG_REG_BITS(AIU_CLK_CTRL_MORE, 0, 6, 1);
+			//WRITE_MPEG_REG_BITS(AIU_CLK_CTRL_MORE, 0, 6, 1);
 			WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_CONTROL, 0, 30, 1);
         }
 
 		WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_MASKS, 0xffff, 0, 16);
 
-        WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_CONTROL, 1, 0, 1);
+        WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_CONTROL, 1, 0, 3);
         WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_CONTROL, 0, 0, 1);
-
-        WRITE_MPEG_REG(AIU_MEM_IEC958_BUF_CNTL, 1);
-        WRITE_MPEG_REG(AIU_MEM_IEC958_BUF_CNTL, 0);
     }
 }
 /*
@@ -742,9 +739,9 @@ void audio_set_958_clk(unsigned freq, unsigned fs_config, int channels)
 	//WRITE_MPEG_REG(AIU_CLK_CTRL_MORE, 0);
 
 	if (channels == 8) {
-		WRITE_MPEG_REG_BITS(AIU_CLK_CTRL_MORE, 1, 6, 1);
+		//WRITE_MPEG_REG_BITS(AIU_CLK_CTRL_MORE, 1, 6, 1);
 	} else {
-		WRITE_MPEG_REG_BITS(AIU_CLK_CTRL_MORE, 0, 6, 1);
+		//WRITE_MPEG_REG_BITS(AIU_CLK_CTRL_MORE, 0, 6, 1);
 	}
 
     /*--- IEC958 clock  configuration, use MPLL1--- */
@@ -931,7 +928,7 @@ void audio_set_958_mode(unsigned mode, _aiu_958_raw_setting_t * set)
         mode = AIU_958_MODE_PCM16; //use 958 raw pcm mode
         WRITE_MPEG_REG(AIU_958_VALID_CTRL,3);//enable 958 invalid bit    
     } else
-        WRITE_MPEG_REG(AIU_958_VALID_CTRL,0);
+        WRITE_MPEG_REG(AIU_958_VALID_CTRL,3);
     
     if (mode == AIU_958_MODE_RAW) {
 
@@ -947,7 +944,7 @@ void audio_set_958_mode(unsigned mode, _aiu_958_raw_setting_t * set)
     }else if(mode == AIU_958_MODE_PCM32){
         audio_hw_set_958_pcm24(set);
         if(ENABLE_IEC958){
-            WRITE_MPEG_REG(AIU_958_MISC, 0x1080);
+            WRITE_MPEG_REG(AIU_958_MISC, 0x1480);
             WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_CONTROL, 1, 8, 1);  // pcm
             WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_CONTROL, 0, 7, 1);  // 32bit
             WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_CONTROL, 0, 3, 3); // endian
@@ -998,13 +995,15 @@ void audio_hw_958_enable(unsigned flag)
     if (ENABLE_IEC958){
         if(flag){
             WRITE_MPEG_REG(AIU_RST_SOFT, 0x04);
-            WRITE_MPEG_REG(AIU_958_FORCE_LEFT, 0);
-            WRITE_MPEG_REG_BITS(AIU_958_DCU_FF_CTRL, 1, 0, 1);
+			//WRITE_MPEG_REG(AIU_958_FORCE_LEFT, 0);
             WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_CONTROL, 3, 1, 2);
+            WRITE_MPEG_REG_BITS(AIU_958_DCU_FF_CTRL, 1, 0, 1);
         }else{
-            WRITE_MPEG_REG(AIU_958_DCU_FF_CTRL, 0);
+            WRITE_MPEG_REG(AIU_RST_SOFT, 0x04);
+			//WRITE_MPEG_REG(AIU_958_FORCE_LEFT, 0);
+            WRITE_MPEG_REG_BITS(AIU_958_DCU_FF_CTRL, 0, 0, 1);
             WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_CONTROL, 0, 1, 2);          
-        }   
+        }  
     }
 }
 

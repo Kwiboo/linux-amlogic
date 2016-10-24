@@ -392,10 +392,14 @@ static int aml_dai_spdif_prepare(struct snd_pcm_substream *substream,
 
 	ALSA_TRACE();
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
-		ALSA_PRINT("dma_addr:%p, dma_area:%p, dma_bytes:%p\n", runtime->dma_addr, runtime->dma_area, runtime->dma_bytes);
+		ALSA_PRINT("dma_addr:%p, dma_area:%p, dma_bytes:%d, buffer_bytes:%d\n", runtime->dma_addr, runtime->dma_area, runtime->dma_bytes, snd_pcm_lib_buffer_bytes(substream));
 		memset((void *)runtime->dma_area, 0, runtime->dma_bytes);
-		audio_set_958outbuf(runtime->dma_addr, runtime->dma_bytes, 0);
-		aout_notifier_call_chain(AOUT_EVENT_IEC_60958_PCM, substream);
+		audio_set_958outbuf(runtime->dma_addr, snd_pcm_lib_buffer_bytes(substream), 0);
+		if (IEC958_mode_codec == 8) {
+			aout_notifier_call_chain(AOUT_EVENT_RAWDATA_MAT_MLP, substream);
+		} else {
+			aout_notifier_call_chain(AOUT_EVENT_IEC_60958_PCM, substream);
+		}
 	} else {
 		audio_in_spdif_set_buf(runtime->dma_addr,
 				       runtime->dma_bytes * 2);
@@ -485,6 +489,12 @@ static int aml_dai_spdif_hw_params(struct snd_pcm_substream *substream,
 		iec958_mode = AIU_958_MODE_PCM16;
 		break;
 	}
+	
+	if (rate == 192000 && params_channels(params) == 8 && params_format(params) == SNDRV_PCM_FORMAT_S16) {
+		IEC958_mode_codec = 8;
+	} else {
+		IEC958_mode_codec = 0;
+	}
 
 	/* AES1+0 */
 	if (iec958_mode == AIU_958_MODE_PCM_RAW) {
@@ -519,7 +529,11 @@ static int aml_dai_spdif_hw_params(struct snd_pcm_substream *substream,
 	audio_set_958_clk(sample_rate, AUDIO_CLK_256FS, params_channels(params));
 
     WRITE_MPEG_REG_BITS(AIU_CLK_CTRL, 0, 12, 1);// 958 divisor more, if true, divided by 2, 4, 6, 8
-	WRITE_MPEG_REG_BITS(AIU_CLK_CTRL, 3, 4, 2);	/* 512fs divide 4 == 128fs */
+	if (IEC958_mode_codec == 8) {
+		WRITE_MPEG_REG_BITS(AIU_CLK_CTRL, 0, 4, 2);	/* 512fs divide 4 == 128fs */
+	} else {
+		WRITE_MPEG_REG_BITS(AIU_CLK_CTRL, 3, 4, 2);	/* 512fs divide 4 == 128fs */
+	}
     WRITE_MPEG_REG_BITS(AIU_CLK_CTRL, 1, 1, 1);// enable 958 clock
 	WRITE_MPEG_REG_BITS(AIU_I2S_MISC, 0, 3, 1);
 
@@ -584,7 +598,7 @@ static struct snd_soc_dai_driver aml_spdif_dai[] = {
 				SNDRV_PCM_RATE_96000 |
 				SNDRV_PCM_RATE_176400 | SNDRV_PCM_RATE_192000),
 		      .formats =
-		      (SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_S24_LE),},
+		      (SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_S24_LE | SNDRV_PCM_FMTBIT_S32_LE),},
 	 .capture = {
 		     .stream_name = "S/PDIF Capture",
 		     .channels_min = 1,

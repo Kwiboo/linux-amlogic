@@ -84,6 +84,7 @@ static void set_hpll_clk_out(unsigned clk)
     aml_write_reg32(P_HHI_VID_PLL_CNTL4, 0x40238100);
     aml_write_reg32(P_HHI_VID_PLL_CNTL5, 0x00012286);
     aml_write_reg32(P_HHI_VID2_PLL_CNTL2, 0x430a800);       // internal LDO share with HPLL & VIID PLL
+    aml_set_reg32_bits(P_HHI_VID_PLL_CNTL, 0x21ef, 0, 15);
     switch(clk){
         case 2971:      // only for 4k mode
 #ifdef CONFIG_AML_VOUT_FRAMERATE_AUTOMATION
@@ -93,7 +94,7 @@ static void set_hpll_clk_out(unsigned clk)
             if (IS_MESON_M8_CPU && hdmitx_is_special_tv_process()) {//SAMSUNG future TV, M8, in 4K2K mode
 #ifdef CONFIG_AML_VOUT_FRAMERATE_AUTOMATION
                 if ( clk == 2976 )
-                    aml_write_reg32(P_HHI_VID_PLL_CNTL2, 0x59c84d04); // lower div_frac to get clk*0.999
+                    aml_write_reg32(P_HHI_VID_PLL_CNTL2, 0x59c84d03); // lower div_frac to get clk*0.999
                 else
                     aml_write_reg32(P_HHI_VID_PLL_CNTL2, 0x59c84e00);
 #else
@@ -103,29 +104,30 @@ static void set_hpll_clk_out(unsigned clk)
                 aml_write_reg32(P_HHI_VID_PLL_CNTL4, 0x4123b100);
                 aml_write_reg32(P_HHI_VID_PLL_CNTL5, 0x00012385);
                 aml_write_reg32(P_HHI_VID_PLL_CNTL,  0x6000043d);
-                aml_write_reg32(P_HHI_VID_PLL_CNTL,  0x4000043d);
+                //aml_write_reg32(P_HHI_VID_PLL_CNTL,  0x4000043d);
                 WAIT_FOR_PLL_LOCKED(P_HHI_VID_PLL_CNTL);
                 h_delay();
                 aml_write_reg32(P_HHI_VID_PLL_CNTL5, 0x00016385);   // optimise HPLL VCO 2.97GHz performance
             }
             else {
-#ifdef CONFIG_AML_VOUT_FRAMERATE_AUTOMATION
-                if ( clk == 2976 )
-                    aml_write_reg32(P_HHI_VID_PLL_CNTL2, 0x69d84d04); // lower div_frac to get clk*0.999
-                else
-                    aml_write_reg32(P_HHI_VID_PLL_CNTL2, 0x69d84e00);
-#else
-                aml_write_reg32(P_HHI_VID_PLL_CNTL2, 0x69d84e00);
-#endif
-                aml_write_reg32(P_HHI_VID_PLL_CNTL3, 0xca46c023);
+				aml_write_reg32(P_HHI_VID_PLL_CNTL2, 0x69c84000);
+                aml_write_reg32(P_HHI_VID_PLL_CNTL3, 0xce49c022);
                 aml_write_reg32(P_HHI_VID_PLL_CNTL4, 0x4123b100);
                 aml_set_reg32_bits(P_HHI_VID2_PLL_CNTL2, 1, 16, 1);
                 aml_write_reg32(P_HHI_VID_PLL_CNTL5, 0x00012385);
                 aml_write_reg32(P_HHI_VID_PLL_CNTL,  0x6000043d);
-                aml_write_reg32(P_HHI_VID_PLL_CNTL,  0x4000043d);
+                //aml_write_reg32(P_HHI_VID_PLL_CNTL,  0x4000043d);
                 WAIT_FOR_PLL_LOCKED(P_HHI_VID_PLL_CNTL);
                 h_delay();
                 aml_write_reg32(P_HHI_VID_PLL_CNTL5, 0x00016385);   // optimise HPLL VCO 2.97GHz performance
+#ifdef CONFIG_AML_VOUT_FRAMERATE_AUTOMATION
+                if ( clk == 2976 )
+                    aml_write_reg32(P_HHI_VID_PLL_CNTL2, 0x69c84d03); // lower div_frac to get clk*0.999
+                else
+                    aml_write_reg32(P_HHI_VID_PLL_CNTL2, 0x69c84e00);
+#else
+                aml_write_reg32(P_HHI_VID_PLL_CNTL2, 0x69c84e00);
+#endif
             }
             break;
         case 2970:      // for 1080p/i 720p mode
@@ -137,15 +139,15 @@ static void set_hpll_clk_out(unsigned clk)
             aml_write_reg32(P_HHI_VID_PLL_CNTL4, 0x4123b100);
             aml_write_reg32(P_HHI_VID_PLL_CNTL5, 0x00012385);
             aml_write_reg32(P_HHI_VID_PLL_CNTL,  0x6000043d);
-            aml_write_reg32(P_HHI_VID_PLL_CNTL,  0x4000043d);
+            //aml_write_reg32(P_HHI_VID_PLL_CNTL,  0x4000043d);
             WAIT_FOR_PLL_LOCKED(P_HHI_VID_PLL_CNTL);
             h_delay();
             aml_write_reg32(P_HHI_VID_PLL_CNTL5, 0x00016385);   // optimise HPLL VCO 2.97GHz performance
 #ifdef CONFIG_AML_VOUT_FRAMERATE_AUTOMATION
 			if( clk == 2975 )
-				aml_write_reg32(P_HHI_VID_PLL_CNTL2, 0x69c84d04); // lower div_frac to get clk*0.999
+				aml_write_reg32(P_HHI_VID_PLL_CNTL2, 0x69c84d03); // frac=3332, lower div_frac to get clk*0.999
 			else
-				aml_write_reg32(P_HHI_VID_PLL_CNTL2, 0x69c84e00);
+				aml_write_reg32(P_HHI_VID_PLL_CNTL2, 0x69c84e00); // frac=3584
 #else
             aml_write_reg32(P_HHI_VID_PLL_CNTL2, 0x69c84e00);
 #endif
@@ -156,7 +158,7 @@ static void set_hpll_clk_out(unsigned clk)
             aml_write_reg32(P_HHI_VID_PLL_CNTL4, 0x0123b100);
             aml_write_reg32(P_HHI_VID_PLL_CNTL5, 0x12385);
             aml_write_reg32(P_HHI_VID_PLL_CNTL,  0x6001042d);
-            aml_write_reg32(P_HHI_VID_PLL_CNTL,  0x4001042d);
+            //aml_write_reg32(P_HHI_VID_PLL_CNTL,  0x4001042d);
             WAIT_FOR_PLL_LOCKED(P_HHI_VID_PLL_CNTL);
             break;
 #ifdef CONFIG_AML_VOUT_FRAMERATE_AUTOMATION
@@ -166,20 +168,20 @@ static void set_hpll_clk_out(unsigned clk)
             aml_write_reg32(P_HHI_VID_PLL_CNTL4, 0x0123b100);
             aml_write_reg32(P_HHI_VID_PLL_CNTL5, 0x12385);
             aml_write_reg32(P_HHI_VID_PLL_CNTL,  0x6001042c);
-            aml_write_reg32(P_HHI_VID_PLL_CNTL,  0x4001042c);
+            //aml_write_reg32(P_HHI_VID_PLL_CNTL,  0x4001042c);
             WAIT_FOR_PLL_LOCKED(P_HHI_VID_PLL_CNTL);
 			break;
 #endif			
         case 1080:
             aml_write_reg32(P_HHI_VID_PLL_CNTL,  0x6000042d);
-            aml_write_reg32(P_HHI_VID_PLL_CNTL,  0x4000042d);
+            //aml_write_reg32(P_HHI_VID_PLL_CNTL,  0x4000042d);
             WAIT_FOR_PLL_LOCKED(P_HHI_VID_PLL_CNTL);
             break;
 #ifdef CONFIG_AML_VOUT_FRAMERATE_AUTOMATION		
 		case 1081:/*for N200/M200 480p59hz*/
 			aml_write_reg32(P_HHI_VID_PLL_CNTL2, 0x69c8cf48);
 			aml_write_reg32(P_HHI_VID_PLL_CNTL,  0x6000042c);
-            aml_write_reg32(P_HHI_VID_PLL_CNTL,  0x4000042c);
+            //aml_write_reg32(P_HHI_VID_PLL_CNTL,  0x4000042c);
             WAIT_FOR_PLL_LOCKED(P_HHI_VID_PLL_CNTL);
             break;
 #endif
