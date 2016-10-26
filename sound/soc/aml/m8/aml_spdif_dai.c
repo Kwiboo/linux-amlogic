@@ -497,7 +497,9 @@ static int aml_dai_spdif_hw_params(struct snd_pcm_substream *substream,
 	}
 
 	/* AES1+0 */
-	if (iec958_mode == AIU_958_MODE_PCM_RAW) {
+	if (iec958_mode == AIU_958_MODE_PCM_RAW ||
+	   (rate == 48000 && params_channels(params) == 2 && params_format(params) == SNDRV_PCM_FORMAT_S16) ||
+	   (rate == 192000 && params_channels(params) == 2 && params_format(params) == SNDRV_PCM_FORMAT_S16)) {
 		set.chan_stat->chstat0_l = 0x8206;
 	} else {
 		set.chan_stat->chstat0_l = 0x8204;
@@ -530,9 +532,11 @@ static int aml_dai_spdif_hw_params(struct snd_pcm_substream *substream,
 
     WRITE_MPEG_REG_BITS(AIU_CLK_CTRL, 0, 12, 1);// 958 divisor more, if true, divided by 2, 4, 6, 8
 	if (IEC958_mode_codec == 8) {
-		WRITE_MPEG_REG_BITS(AIU_CLK_CTRL, 0, 4, 2);	/* 512fs divide 4 == 128fs */
+		WRITE_MPEG_REG_BITS(AIU_CLK_CTRL, 0, 4, 2);	/* 512fs */
+		WRITE_MPEG_REG_BITS(AIU_CLK_CTRL_MORE, 1, 6, 1);
 	} else {
 		WRITE_MPEG_REG_BITS(AIU_CLK_CTRL, 3, 4, 2);	/* 512fs divide 4 == 128fs */
+		WRITE_MPEG_REG_BITS(AIU_CLK_CTRL_MORE, 0, 6, 1);
 	}
     WRITE_MPEG_REG_BITS(AIU_CLK_CTRL, 1, 1, 1);// enable 958 clock
 	WRITE_MPEG_REG_BITS(AIU_I2S_MISC, 0, 3, 1);

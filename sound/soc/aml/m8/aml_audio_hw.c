@@ -918,7 +918,7 @@ void set_958_channel_status(_aiu_958_channel_status_t * set)
 
 static void audio_hw_set_958_pcm24(_aiu_958_raw_setting_t * set)
 {
-    WRITE_MPEG_REG(AIU_958_BPF, 0x80); /* in pcm mode, set bpf to 128 */
+    WRITE_MPEG_REG(AIU_958_BPF, IEC958_mode_codec == 8 ? 0x200 : 0x80); /* in pcm mode, set bpf to 128 */
     set_958_channel_status(set->chan_stat);
 }
 
@@ -972,7 +972,7 @@ void audio_set_958_mode(unsigned mode, _aiu_958_raw_setting_t * set)
 
     audio_hw_958_reset(0, 1);
 
-    //WRITE_MPEG_REG(AIU_958_FORCE_LEFT, 1);
+    WRITE_MPEG_REG(AIU_958_FORCE_LEFT, 1);
 }
 void audio_out_i2s_enable(unsigned flag)
 {

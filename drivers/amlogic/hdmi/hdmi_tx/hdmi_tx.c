@@ -1086,6 +1086,7 @@ static struct rate_map_fs map_fs[] = {
     {96000,  FS_96K},
     {176400, FS_176K4},
     {192000, FS_192K},
+    {768000, FS_768K},
 };
 
 static audio_fs_t aud_samp_rate_map(unsigned int rate)
@@ -1155,7 +1156,7 @@ static int hdmitx_notify_callback_a(struct notifier_block *block, unsigned long 
     rx_cap_t* pRXCap = &(hdmitx_device.RXCap);
     struct snd_pcm_substream *substream =(struct snd_pcm_substream*)para;
     Hdmi_tx_audio_para_t* audio_param = &(hdmitx_device.cur_audio_param);
-    audio_fs_t n_rate = aud_samp_rate_map(substream->runtime->rate);
+    audio_fs_t n_rate = aud_samp_rate_map((substream->runtime->rate == 192000 && substream->runtime->channels == 8 && substream->runtime->sample_bits == 16) ? 768000 : substream->runtime->rate);
     audio_sample_size_t n_size = aud_size_map(substream->runtime->sample_bits);
 
     hdmitx_device.audio_param_update_flag = 0;

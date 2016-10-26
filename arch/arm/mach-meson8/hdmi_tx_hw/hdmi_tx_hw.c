@@ -1861,17 +1861,18 @@ static void hdmi_audio_init(unsigned char spdif_flag, unsigned char channels)
     tmp_add_data |= 2               << 4; // [5:4]  Serial Format: I2S format
     tmp_add_data |= 3               << 2; // [3:2]  Bit Width: 24-bit
     tmp_add_data |= 0               << 1; // [1]    WS Polarity: 0=WS high is right
-    tmp_add_data |= 1               << 0; // [0]    For I2S: 0=one-bit audio; 1=I2S;
+    tmp_add_data |= tx_i2s_spdif    << 0; // [0]    For I2S: 0=one-bit audio; 1=I2S;
                                           //        For SPDIF: 0= channel status from input data; 1=from register
     hdmi_wr_reg(TX_AUDIO_FORMAT, tmp_add_data); // 0x2f
 
-    //tmp_add_data  = 0;
-    //tmp_add_data |= 0x4 << 4; // [7:4]  FIFO Depth=512
-    //tmp_add_data |= 0x2 << 2; // [3:2]  Critical threshold=Depth/16
-    //tmp_add_data |= 0x1 << 0; // [1:0]  Normal threshold=Depth/8
-    //hdmi_wr_reg(TX_AUDIO_FIFO, tmp_add_data); // 0x49
-    hdmi_wr_reg(TX_AUDIO_FIFO, aud_para); // 0x49
-
+    tmp_add_data  = 0;
+    tmp_add_data |= 0x4 << 4; // [7:4]  FIFO Depth=512
+	//tmp_add_data |= 0x3 << 4; // [7:4]  FIFO Depth=256
+    tmp_add_data |= 0x2 << 2; // [3:2]  Critical threshold=Depth/16
+	//tmp_add_data |= 0x3 << 2; // [3:2]  Critical threshold=Depth/32
+    tmp_add_data |= 0x1 << 0; // [1:0]  Normal threshold=Depth/8
+    hdmi_wr_reg(TX_AUDIO_FIFO, tmp_add_data); // 0x49
+	
     hdmi_wr_reg(TX_AUDIO_LIPSYNC, 0); // [7:0] Normalized lip-sync param: 0 means S(lipsync) = S(total)/2
 
     tmp_add_data  = 0;
@@ -2313,6 +2314,19 @@ static void set_hdmi_audio_source(unsigned int src)
     data32 |= 0     << 0;   // [1:0]    hdmi_clk_sel: 00=Disable hdmi audio clock input; 01=Select pcm clock; 10=Select AIU aoclk; 11=Not allowed.
 //    Wr(AIU_HDMI_CLK_DATA_CTRL, data32);
     aml_write_reg32(P_AIU_HDMI_CLK_DATA_CTRL, data32);
+	// Wait until clock change is settled
+	i = 0;
+	while ( (((aml_read_reg32(P_AIU_HDMI_CLK_DATA_CTRL))>>8)&0x3) != 0x2 ) {
+	//    if (i > 255) {
+	//        //stimulus_print("[TEST.C] Error: set_hdmi_audio_source timeout!\n");
+	//        //stimulus_finish_fail(10);
+	//    }
+		i ++;
+		if(i>100000)
+			break;
+	}
+	if(i>100000)
+		hdmi_print(ERR, AUD "Time out: AIU_HDMI_CLK_DATA_CTRL\n");
 
     switch(src)
     {
@@ -2429,7 +2443,7 @@ static Cts_conf_tab cts_table_192k[] = {
     {24576,  54000 * 1000 / 1001,  54054},
     {24576, 108000, 108000},
     {24576,  74250,  74250},
-    {23595,  74250 * 1000 / 1001, 71215},
+    {23595,  74250 * 1000 / 1001, 18545},
     {24576, 148500, 148500},
     {23296, 148500 * 1000 / 1001, 140625},
     {20480, 297000, 247500},
@@ -2601,7 +2615,7 @@ static void hdmitx_set_aud_cts(audio_type_t type, Hdmi_tx_audio_cts_t cts_mode, 
         hdmi_print(IMP, AUD "type: %d  CTS Mode: %d  VIC: %d  CTS: %d\n", type, cts_mode, vic, cts_val);
         hdmi_wr_reg(TX_SYS1_ACR_N_0, (n_val&0xff)); // N[7:0]
         hdmi_wr_reg(TX_SYS1_ACR_N_1, (n_val>>8)&0xff); // N[15:8]
-        hdmi_wr_reg(TX_SYS1_ACR_N_2, (7<<4)|((n_val>>16)&0xf)); // N[19:16]
+        hdmi_wr_reg(TX_SYS1_ACR_N_2, (0x3<<4)|((n_val>>16)&0xf)); // N[19:16]
     }
 }
 
@@ -2664,7 +2678,7 @@ static int hdmitx_set_audmode(struct hdmi_tx_dev_s* hdmitx_device, Hdmi_tx_audio
         i2s_to_spdif_flag = 1;
     }
     if(!hdmi_audio_off_flag){
-        hdmi_audio_init(i2s_to_spdif_flag, (audio_param->channel_num > CC_2CH && audio_param->type == CT_PCM) ? 8 : 2);
+        hdmi_audio_init(i2s_to_spdif_flag, audio_param->channel_num + 1);
     }
     else {
         hdmi_wr_reg(TX_AUDIO_PACK, 0x00); // disable audio sample packets
@@ -2819,9 +2833,9 @@ static int hdmitx_set_audmode(struct hdmi_tx_dev_s* hdmitx_device, Hdmi_tx_audio
         hdmi_wr_reg(TX_AUDIO_FORMAT, (hdmi_rd_reg(TX_AUDIO_FORMAT) & 0xfe));        // clear bit0, use channel status bit from input data
     }
 
-    if(audio_param->type == CT_MAT)
-        hdmitx_set_aud_cts(audio_param->type, AUD_CTS_FIXED, hdmitx_device->cur_VIC);
-    else
+    //if(audio_param->type == CT_MAT)
+    //    hdmitx_set_aud_cts(audio_param->type, AUD_CTS_FIXED, hdmitx_device->cur_VIC);
+    //else
         hdmitx_set_aud_cts(audio_param->type, AUD_CTS_AUTO, hdmitx_device->cur_VIC);
 
 //todo    hdmitx_special_handler_audio(hdmitx_device);

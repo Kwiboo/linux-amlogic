@@ -423,6 +423,7 @@ typedef enum {
     FS_96K   = 5,
     FS_176K4 = 6,
     FS_192K  = 7,
+    FS_768K  = 8,
     FS_MAX,
 }audio_fs_t;
 

@@ -28,6 +28,7 @@ static const unsigned char channel_status_freq[]=
     0xa, //96k
     0xc, //176.4k
     0xe, //192k
+    0x9, //768k
 };
 
 static const unsigned char channel_status_sample_word_length[]=
@@ -207,10 +208,14 @@ static void hdmi_tx_construct_aud_packet(Hdmi_tx_audio_para_t* audio_param, unsi
 //            AUD_DB[3] = 0; //CA, 2 channel
 //            AUD_DB[4] = 0;//DM_INH<<7|LSV<<3
 //        }
-//        if(CHAN_STAT_BUF){
-//            CHAN_STAT_BUF[3]=CHAN_STAT_BUF[24+3]=channel_status_freq[audio_param->sample_rate];
-//        }
     }
+	if (CHAN_STAT_BUF) {
+		// AES params
+		CHAN_STAT_BUF[0] = CHAN_STAT_BUF[24+0] = (audio_param->type != CT_PCM) ? 0x06 : 0x04;
+		CHAN_STAT_BUF[1] = CHAN_STAT_BUF[24+1] = 0x82;
+		CHAN_STAT_BUF[2] = CHAN_STAT_BUF[24+2] = 0x00;
+		CHAN_STAT_BUF[3] = CHAN_STAT_BUF[24+3] = channel_status_freq[audio_param->sample_rate];
+	}
     AUD_DB[0] = AUD_DB[0] & 0xf;        // bit[7:4] always set to 0 in HDMI
     AUD_DB[1] = 0;                      // always set to 0 in HDMI
 }
