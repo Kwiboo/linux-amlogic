@@ -182,24 +182,39 @@ void audio_set_aiubuf(u32 addr, u32 size, unsigned int channel)
 
 void audio_set_958outbuf(u32 addr, u32 size, int channels)
 {
-    if (ENABLE_IEC958) {
-        WRITE_MPEG_REG(AIU_MEM_IEC958_START_PTR, addr);
-        WRITE_MPEG_REG(AIU_MEM_IEC958_END_PTR, addr + size - 8);
-        WRITE_MPEG_REG(AIU_MEM_IEC958_RD_PTR, addr);
- 
-        if (channels == 8) {
-			//WRITE_MPEG_REG_BITS(AIU_CLK_CTRL_MORE, 1, 6, 1);
-			WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_CONTROL, 1, 30, 1);
-        } else {
-			//WRITE_MPEG_REG_BITS(AIU_CLK_CTRL_MORE, 0, 6, 1);
-			WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_CONTROL, 0, 30, 1);
-        }
+	// bit  [2]     cntl_empty_en   Set to 1 to enable reading the DDR memory FIFO and filling the pipeline to get-bit
+	//                              Set cntl_empty_en = cntl_fill_en = 0 when pulsing cntl_init
+	// bit  [1]     cntl_fill_en    Set to 1 to enable reading data from DDR memory
+	WRITE_MPEG_REG_BITS(AIU_MEM_I2S_CONTROL, 0, 1, 2);
+	WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_CONTROL, 0, 1, 2);
 
-		WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_MASKS, 0xffff, 0, 16);
+	WRITE_MPEG_REG(AIU_MEM_I2S_START_PTR, addr);
+	WRITE_MPEG_REG(AIU_MEM_IEC958_START_PTR, addr);
+	WRITE_MPEG_REG(AIU_MEM_I2S_RD_PTR, addr);
+	WRITE_MPEG_REG(AIU_MEM_IEC958_RD_PTR, addr);
+	WRITE_MPEG_REG(AIU_MEM_I2S_END_PTR, addr + size - 8);
+	WRITE_MPEG_REG(AIU_MEM_IEC958_END_PTR, addr + size - 8);
 
-        WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_CONTROL, 1, 0, 3);
-        WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_CONTROL, 0, 0, 1);
-    }
+	if (channels == 8) {
+		//WRITE_MPEG_REG_BITS(AIU_CLK_CTRL_MORE, 1, 6, 1);
+		//WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_CONTROL, 1, 30, 1);
+	} else {
+		//WRITE_MPEG_REG_BITS(AIU_CLK_CTRL_MORE, 0, 6, 1);
+		//WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_CONTROL, 0, 30, 1);
+	}
+
+	// [31:16] IRQ block.
+	// [15:8] chan_mem_mask.  Each bit indicates which channels exist in memory
+	// [7:0]  chan_rd_mask.   Each bit indicates which channels are READ from memory
+	WRITE_MPEG_REG(AIU_MEM_I2S_MASKS, (24 << 16) | 0xffff);
+	WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_MASKS, 0xffff, 0, 16);
+
+	// bit  [0]     cntl_init:      After setting the read pointers, sizes, channel masks
+	//                              and read masks, set this bit to 1 and then to 0
+	WRITE_MPEG_REG_BITS(AIU_MEM_I2S_CONTROL, 1, 0, 1);
+	WRITE_MPEG_REG_BITS(AIU_MEM_I2S_CONTROL, 0, 0, 1);
+	WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_CONTROL, 1, 0, 1);
+	WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_CONTROL, 0, 0, 1);
 }
 /*
 i2s mode 0: master 1: slave
@@ -918,7 +933,7 @@ void set_958_channel_status(_aiu_958_channel_status_t * set)
 
 static void audio_hw_set_958_pcm24(_aiu_958_raw_setting_t * set)
 {
-    WRITE_MPEG_REG(AIU_958_BPF, IEC958_mode_codec == 8 ? 0x200 : 0x80); /* in pcm mode, set bpf to 128 */
+    WRITE_MPEG_REG(AIU_958_BPF, 0x80); /* in pcm mode, set bpf to 128 */
     set_958_channel_status(set->chan_stat);
 }
 
@@ -944,30 +959,30 @@ void audio_set_958_mode(unsigned mode, _aiu_958_raw_setting_t * set)
     }else if(mode == AIU_958_MODE_PCM32){
         audio_hw_set_958_pcm24(set);
         if(ENABLE_IEC958){
-            WRITE_MPEG_REG(AIU_958_MISC, 0x1480);
+            WRITE_MPEG_REG(AIU_958_MISC, 0x3480);
             WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_CONTROL, 1, 8, 1);  // pcm
             WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_CONTROL, 0, 7, 1);  // 32bit
             WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_CONTROL, 0, 3, 3); // endian
         }
-        printk("IEC958 32bit\n");
+        printk("IEC958 PCM32\n");
     }else if (mode == AIU_958_MODE_PCM24) {
         audio_hw_set_958_pcm24(set);
         if (ENABLE_IEC958) {
-            WRITE_MPEG_REG(AIU_958_MISC, 0x1080);
+            WRITE_MPEG_REG(AIU_958_MISC, 0x3080);
             WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_CONTROL, 1, 8, 1);  // pcm
             WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_CONTROL, 0, 7, 1);  // 32bit
             WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_CONTROL, 0, 3, 3); // endian
         }
-        printk("IEC958 24bit\n");
+        printk("IEC958 PCM24\n");
     } else if (mode == AIU_958_MODE_PCM16) {
         audio_hw_set_958_pcm24(set);
         if (ENABLE_IEC958) {
-            WRITE_MPEG_REG(AIU_958_MISC, 0x1042);
+            WRITE_MPEG_REG(AIU_958_MISC, 0x3042);
             WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_CONTROL, 1, 8, 1);  // pcm
             WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_CONTROL, 1, 7, 1);  // 16bit
             WRITE_MPEG_REG_BITS(AIU_MEM_IEC958_CONTROL, 0, 3, 3); // endian
         }
-        printk("IEC958 16bit\n");
+        printk("IEC958 PCM16\n");
     }
 
     audio_hw_958_reset(0, 1);
