@@ -3637,6 +3637,7 @@ static irqreturn_t vsync_isr(int irq, void *dev_id)
 	}
 	if (omx_secret_mode == true) {
 		u32 system_time = timestamp_pcrscr_get();
+		video_notify_flag |= VIDEO_NOTIFY_TRICK_WAIT;
 		int diff = system_time - omx_pts;
 		if ((diff - omx_pts_interval_upper) > 0
 			|| (diff - omx_pts_interval_lower) < 0) {

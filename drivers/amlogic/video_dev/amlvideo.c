@@ -67,6 +67,7 @@ AMLVIDEO_MINOR_VERSION, AMLVIDEO_RELEASE)
 
 #define AMLVIDEO_POOL_SIZE 16
 static struct vfq_s q_ready;
+static struct vfq_s q_omx;
 /*extern bool omx_secret_mode;*/
 static u8 first_frame;
 static u64 last_pts_us64;
@@ -149,9 +150,11 @@ static struct vivi_fmt formats[] = {
 };
 
 struct vframe_s *amlvideo_pool_ready[AMLVIDEO_POOL_SIZE + 1];
+struct vframe_s *amlvideo_pool_omx[AMLVIDEO_POOL_SIZE + 1];
 /* ------------------------------------------------------------------
  *           provider operations
  *-----------------------------------------------------------------*/
+
 static struct vframe_s *amlvideo_vf_peek(void *op_arg)
 {
 	return vfq_peek(&q_ready);
@@ -187,10 +190,11 @@ static int amlvideo_vf_states(struct vframe_states *states, void *op_arg)
 {
 	/* unsigned long flags; */
 	/* spin_lock_irqsave(&lock, flags); */
+	int avail_count = vfq_level(&q_ready) + vfq_level(&q_omx);
 	states->vf_pool_size = AMLVIDEO_POOL_SIZE;
 	states->buf_recycle_num = 0;
-	states->buf_free_num = AMLVIDEO_POOL_SIZE - vfq_level(&q_ready);
-	states->buf_avail_num = vfq_level(&q_ready);
+	states->buf_free_num = AMLVIDEO_POOL_SIZE - avail_count;
+	states->buf_avail_num = avail_count;
 	/* spin_unlock_irqrestore(&lock, flags); */
 	return 0;
 }
@@ -295,6 +299,8 @@ static int video_receiver_event_fun(int type, void *data, void *private_data)
 		first_frame = 0;
 		vfq_init(&q_ready, AMLVIDEO_POOL_SIZE + 1,
 			&amlvideo_pool_ready[0]);
+		vfq_init(&q_omx, AMLVIDEO_POOL_SIZE + 1,
+			&amlvideo_pool_omx[0]);
 	}
 	if (type == VFRAME_EVENT_PROVIDER_REG) {
 		AMLVIDEO_DBG("AML:VFRAME_EVENT_PROVIDER_REG\n");
@@ -329,6 +335,8 @@ static int video_receiver_event_fun(int type, void *data, void *private_data)
 			omx_secret_mode = true;
 			vfq_init(&q_ready, AMLVIDEO_POOL_SIZE + 1,
 					&amlvideo_pool_ready[0]);
+			vfq_init(&q_omx, AMLVIDEO_POOL_SIZE + 1,
+					&amlvideo_pool_omx[0]);
 			vf_provider_init(&amlvideo_vf_prov, PROVIDER_NAME,
 						&amlvideo_vf_provider, NULL);
 			vf_reg_provider(&amlvideo_vf_prov);
@@ -578,7 +586,29 @@ static int vidioc_qbuf(struct file *file, void *priv, struct v4l2_buffer *p)
 {
 	int ret = 0;
 	if (omx_secret_mode == true)
+	{
+		if (freerun_mode == 3)
+		{
+			u64 pts = (p->timestamp.tv_sec << 32ULL) | p->timestamp.tv_usec;
+			struct vframe_s *vf;
+			while ((vf = vfq_pop(&q_omx)))
+			{
+				if (vf->pts_us64 < pts)
+				{
+					vf_put(ppmgrvf, RECEIVER_NAME);
+					vf_notify_provider(RECEIVER_NAME, VFRAME_EVENT_RECEIVER_PUT, NULL);
+
+					printk("vidioc_qbuf pts_us64:%llu v4l2_s:%llu v4l2_us:%llu v4l2_pts:%llu\n", vf->pts_us64, p->timestamp.tv_sec,  p->timestamp.tv_usec, pts);
+				}
+				else
+				{
+					vfq_push(&q_ready, vf);
+					break;
+				}
+			}
+		}
 		return ret;
+	}
 
 	if (ppmgrvf) {
 		vf_put(ppmgrvf, RECEIVER_NAME);
@@ -653,8 +683,9 @@ static int freerun_dqbuf(struct v4l2_buffer *p)
 		return -EAGAIN;
 	}
 	if (omx_secret_mode == true) {
-		vfq_push(&q_ready, ppmgrvf);
 		p->index = 0;
+
+		//printk("%s, %s, %d pts_us64:%llu duration:%u\n", __FILE__, __FUNCTION__, __LINE__, ppmgrvf->pts_us64, ppmgrvf->duration);
 
 		if (ppmgrvf->pts_us64) {
 			first_frame = 1;
@@ -671,6 +702,12 @@ static int freerun_dqbuf(struct v4l2_buffer *p)
 		last_pts_us64 = pts_us64;
 		p->timecode.type = ppmgrvf->width;
 		p->timecode.flags = ppmgrvf->height;
+
+		ppmgrvf->pts_us64 = pts_us64;
+		if (freerun_mode != 3)
+			vfq_push(&q_ready, ppmgrvf);
+		else
+			vfq_push(&q_omx, ppmgrvf);
 
 		vf_notify_receiver(
 				PROVIDER_NAME,
@@ -804,7 +841,7 @@ static int vidioc_dqbuf(struct file *file, void *priv, struct v4l2_buffer *p)
 {
 	int ret = 0;
 
-	if (freerun_mode == 1) {
+	if (freerun_mode == 1 || freerun_mode == 3) {
 		/* pr_err("amlvideo dqbuf called freerun_mode=1\n"); */
 		ret = freerun_dqbuf(p);
 	} else if (freerun_mode == 2) {
